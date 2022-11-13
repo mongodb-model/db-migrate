@@ -20,7 +20,7 @@ const { createReadStream, createWriteStream, promises,readdirSync,statSync } = r
 const {join } = require('node:path');
 const {mkdir} = promises
 const {existsSync, lstatSync} = require('fs')
-const Model = require('@mongodb-model/app');
+const Model = {};// require('@mongodb-model/app');
 
 
 class Migrate extends require("./base") {
