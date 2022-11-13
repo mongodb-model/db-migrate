@@ -1,6 +1,6 @@
 {
   "name": "@mongodb-model/db-migrate",
-  "version": "0.0.0",
+  "version": "0.0.100011",
   "description": "db-migrate",
   "main": "index.js",
   "bin": {
