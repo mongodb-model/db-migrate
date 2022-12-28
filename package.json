@@ -31,7 +31,7 @@
   },
   "homepage": "https://github.com/mongodb-model/db-migrate#readme",
   "dependencies": {
-    "@mongodb-model/app": "^0.0.100010",
+ 
     "dotenv": "16.0.3",
     "mongodb": "4.11.0",
     "vitest": "0.25.1"
