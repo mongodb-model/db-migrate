@@ -120,7 +120,7 @@ class Migrate extends require("./base") {
     
     // return console.log(Green(`${ns} migration successfully created!`));
    
-    return console.log(Green(`Migration ${namespace.db}.${namespace.collection} successfully created!`));
+    return console.log(Green(`${namespace.db}.${namespace.collection} successfully migrated!`));
 }
 
 onCreateCollectionError (error) {
@@ -136,8 +136,10 @@ onCreateCollectionError (error) {
     // .split("'")[0]
     // return console.log('string error', string);
     let string = error.message
-     string = error.message.split(' ').slice(1).join(' ').trim()
-  return (error && error.codeName === 'NamespaceExists') ? console.log(Red(`Migration ${string}`)): ''
+     string = error.message.split(' ').slice(1);//.join(' ').trim()
+     string.pop();
+     string  = string.join(' ').trim()
+  return (error && error.codeName === 'NamespaceExists') ? console.log(Red(`${string} migrated!`)): ''
 }
 
 schemaName(name = 'User') {
