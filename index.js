@@ -20,7 +20,9 @@ const { createReadStream, createWriteStream, promises,readdirSync,statSync } = r
 const {join } = require('node:path');
 const {mkdir} = promises
 const {existsSync, lstatSync} = require('fs')
-const Model = {};// require('@mongodb-model/app');
+const Model = require('@mongodb-model/base-model')
+const Couleurs = require('@mongodb-model/couleurs')
+const {Green, Red} = new Couleurs
 
 
 class Migrate extends require("./base") {
@@ -58,7 +60,13 @@ class Migrate extends require("./base") {
       await require('fs').promises.mkdir(path, {recursive: true});
     }
   }
+  migrationPath(path = '/database/migrations'){return require('path').join(process.cwd(), path); }
 
+  async addDirectory (path = this.path()) {
+    if(!existsSync(path)){
+      await require('fs').promises.mkdir(path, {recursive: true});
+    }
+  }
   checkForInstallation(){
     // exec('npm list mongo-transform', (error, stdout, stderr) => {
     //   if (error) {
@@ -78,6 +86,13 @@ class Migrate extends require("./base") {
     const modelPath = '/app/schemas/'+paths.join('/');
     return this.path(modelPath)
   }
+  migrationModelPath(command){
+    // return console.log(command);
+    const paths = command.split('/');
+    paths.pop();
+    const modelPath = '/database/migrations/'+paths.join('/');
+    return this.migrationPath(modelPath)
+  }
   modelName(command) {
     // return console.log(command);
     const paths = command.split('/');
@@ -89,7 +104,6 @@ class Migrate extends require("./base") {
     const paths = command.split('--schema=')[1]
     const name = paths.split('/').pop();
     return this.cmd(name);
-  
   }
 
   onCreateCollection (namespace) {
@@ -103,7 +117,10 @@ class Migrate extends require("./base") {
     .split("'")[0]
    
     // return console.log('string', string);
-    return console.log(`\x1b[32m${string} migration successfully created!\x1b[0m`);
+    
+    // return console.log(Green(`${ns} migration successfully created!`));
+   
+    return console.log(Green(`Migration ${namespace.db}.${namespace.collection} successfully created!`));
 }
 
 onCreateCollectionError (error) {
@@ -112,13 +129,15 @@ onCreateCollectionError (error) {
     let secondIndex = Array.from(message).findIndex(str => str == ',');
 
     // return console.log('string error', error.message);
-    let string = error.message
-    .slice(firstIndex,secondIndex)
-    .split(':').filter(str => str.trim().length !== 0).join('')
-    .split(`\x1B[32m'`).filter(str => str.trim().length !== 0).join('')
-    .split("'")[0]
+    // let string = error.message
+    // .slice(firstIndex,secondIndex)
+    // .split(':').filter(str => str.trim().length !== 0).join('')
+    // .split(`\x1B[32m'`).filter(str => str.trim().length !== 0).join('')
+    // .split("'")[0]
     // return console.log('string error', string);
-  return (error && error.codeName === 'NamespaceExists') ? console.log(`\x1b[31m ${string} migration already exists!\x1b[0m`): ''
+    let string = error.message
+     string = error.message.split(' ').slice(1).join(' ').trim()
+  return (error && error.codeName === 'NamespaceExists') ? console.log(Red(`Migration ${string}`)): ''
 }
 
 schemaName(name = 'User') {
@@ -152,9 +171,37 @@ hasSchema(command, schemasPath = './app/schemas'){
   }
  
 }
+hasMigration(command, schemasPath = './database/migrations'){
+  const name = 'database/migrations/' + command.split('=')[1] + '.js';
+  const files = this.getAllFiles(schemasPath);
+  
+  if(files && files.length  > 0){
+     const result = files.find(file => file === name);
+     if(result && result !== undefined) return true;
+     return false;
+  }else{
+    return false;
+  }
+ 
+}
 
 allSchemaMigration(file, model = new Model){
-  model.on('createCollection', this.onCreateCollection)
+  //model.on('createCollection', this.onCreateCollection)
+  model.createCollection(this.cmd(file.split('/').pop().split('.js').join('')),require(join(process.cwd(),'./'+file)))
+  if(model.listenerCount('createCollection') > 1){
+      model.removeListener('createCollection',this.onCreateCollection)
+  }else{
+      model.on('createCollection', this.onCreateCollection)
+  }
+  if(model.listenerCount('createCollection-error') > 1){
+      model.removeListener('createCollection-error',this.onCreateCollectionError)
+  }else{
+      model.on('createCollection-error', this.onCreateCollectionError)
+  }
+}
+
+allMigrationMigration(file, model = new Model){
+  //model.on('createCollection', this.onCreateCollection)
   model.createCollection(this.cmd(file.split('/').pop().split('.js').join('')),require(join(process.cwd(),'./'+file)))
   if(model.listenerCount('createCollection') > 1){
       model.removeListener('createCollection',this.onCreateCollection)
@@ -168,10 +215,21 @@ allSchemaMigration(file, model = new Model){
   }
 }
 schemaMigration(command, model = new Model){
-
+  // const sch = require(join(process.cwd(),'./app/schemas/' + command.split('=')[1] + '.js'));
+  // console.log(this.collectionName(command))
   model.on('createCollection', this.onCreateCollection)
   model.createCollection(this.collectionName(command), require(join(process.cwd(),'./app/schemas/' + command.split('=')[1] + '.js')))
+  // model.on('createCollection', this.onCreateCollection)
+  model.on('createCollection-error', this.onCreateCollectionError)
+ 
+}
+
+migrationMigration(command, model = new Model){
+  // const sch = require(join(process.cwd(),'./app/schemas/' + command.split('=')[1] + '.js'));
+  // console.log(this.collectionName(command))
   model.on('createCollection', this.onCreateCollection)
+  model.createCollection(this.collectionName(command), require(join(process.cwd(),'./database/migrations/' + command.split('=')[1] + '.js')))
+  // model.on('createCollection', this.onCreateCollection)
   model.on('createCollection-error', this.onCreateCollectionError)
  
 }
@@ -187,15 +245,26 @@ async migrateSchema(command, path = './app/schemas'){
     console.log('No schema exists for this migration')
    }
 }
+async migrateMigration(command, path = './database/migrations'){
+  if(this.hasMigration(command)){
+   if(existsSync(join(process.cwd(),'./database/migrations/' + command.split('=')[1] + '.js'))){
+     this.migrationMigration(command)
+   }else{
+     console.log('migration schema not found')
+   }
+  }else{
+   console.log('No schema exists for this migration')
+  }
+}
 async readdirRecursive(dirPath, files = []) {
   try{
       const allFiles = await promises.readdir(dirPath);
       if(allFiles){
           for await(let file of allFiles){
               if((await promises.stat(dirPath + "/" + file)).isDirectory()){
-                  files = this.readdirRecursive(dirPath + "/" + file, files);
+                files = this.readdirRecursive(dirPath + "/" + file, files);
               }else{
-                  files.push(join(__dirname, dirPath, "/", file)) 
+                files.push(join(__dirname, dirPath, "/", file)) 
               }
           }
       }
@@ -223,28 +292,56 @@ getAllFiles (dirPath, arrayOfFiles) {
   }.bind(this))
   return arrayOfFiles
 }
-migrateAll(command, path = './app/schemas'){
+migrateAllMigrations(command, migrationPath = './database/migrations'){
    try{
-    const files = this.getAllFiles(path);
-  if(files && files.length > 0){
-    files.forEach(file => {
-      if(existsSync('./'+file)){
-        this.allSchemaMigration(file)
-      }
-  })
-  }else{
-    console.log('no migration available')
-  }
+    const migrationFiles = this.getAllFiles(migrationPath);
+    const hasMigrationFiles = () => migrationFiles && migrationFiles.length > 0
+    if(hasMigrationFiles()){
+      migrationFiles.forEach(migrationFile => {
+        if(existsSync('./'+migrationFile)){
+          this.allMigrationMigration(migrationFile)
+        }
+    })
+    }else{
+      console.log('no migrations available ')
+    }
    }catch(error){
-     if(error.message.includes('ENOENT: no such file or directory')){
-      this.addDirectory (this.path(path))
+    if(error.message.includes('ENOENT: no such file or directory')){
+      this.addDirectory (this.migrationPath(migrationPath))
      }else{
       console.log(error.message);
      }
    }
-
 }
-
+migrateAllSchemas(command, schemaPath = './app/schemas'){
+  try{
+    const schemaFiles = this.getAllFiles(schemaPath);
+    const hasChemaFiles = () => schemaFiles && schemaFiles.length > 0
+      if(hasChemaFiles()){
+        schemaFiles.forEach(schemaFile => {
+          if(existsSync('./'+schemaFile)){
+            this.allSchemaMigration(schemaFile)
+          }
+      })
+      }else{
+        console.log('no schemas available ')
+      }
+  }catch(error){
+    if(error.message.includes('ENOENT: no such file or directory')){
+      this.addDirectory (this.path(schemaPath))
+     }else{
+      console.log(error.message);
+     }
+  }
+}
+migrateAll(command, schemaPath = './app/schemas', migrationPath = './database/migrations'){
+  if(existsSync(this.migrationPath(migrationPath))){
+    this.migrateAllMigrations(command, migrationPath)
+  }
+  if(existsSync(this.path(schemaPath))){
+    this.migrateAllSchemas(command, schemaPath)
+  }
+}
 async makeDirectory(absolutePath = '../app', directory = 'models') {
   const projectFolder = join(process.cwd(), absolutePath, directory);
   const dirCreation = await mkdir(projectFolder, { recursive: true });

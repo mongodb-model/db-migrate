@@ -44,10 +44,11 @@ class CLI extends require("../base") {
  commands(){
   switch(this.command(2)){
       case "migrate":
-        const {migrate, migrateSchema, migrateAll} = new Migrate({command: this.command(2)})
+        const {migrate, migrateSchema, migrateMigration, migrateAll} = new Migrate({command: this.command(2)})
           if(this.command(3)){
             if(this.command(3).startsWith('--schema=')){
               migrateSchema(this.command(3))
+              migrateMigration(this.command(3))
             }else{
               console.log(`invalid argument. Must be like --schema=<Schema Name>`);
             }
